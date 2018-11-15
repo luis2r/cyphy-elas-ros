@@ -73,11 +73,11 @@ public:
     float   sradius;                // prior sigma radius
     int32_t match_texture;          // min texture for dense matching
     int32_t lr_threshold;           // disparity threshold for left/right consistency check
-    float   speckle_sim_threshold;  // similarity threshold for speckle segmentation
-    int32_t speckle_size;           // maximal size of a speckle (small speckles get removed)
-    int32_t ipol_gap_width;         // interpolate small gaps (left<->right, top<->bottom)
-    bool    filter_median;          // optional median filter (approximated)
-    bool    filter_adaptive_mean;   // optional adaptive mean filter (approximated)
+    // float   speckle_sim_threshold;  // similarity threshold for speckle segmentation
+    // int32_t speckle_size;           // maximal size of a speckle (small speckles get removed)
+    // int32_t ipol_gap_width;         // interpolate small gaps (left<->right, top<->bottom)
+    // bool    filter_median;          // optional median filter (approximated)
+    // bool    filter_adaptive_mean;   // optional adaptive mean filter (approximated)
     bool    postprocess_only_left;  // saves time by not postprocessing the right image
     bool    subsampling;            // saves time by only computing disparities for each 2nd pixel
                                     // note: for this option D1 and D2 must be passed with size
@@ -106,11 +106,11 @@ public:
         sradius               = 2;
         match_texture         = 1;
         lr_threshold          = 2;
-        speckle_sim_threshold = 1;
-        speckle_size          = 200;
-        ipol_gap_width        = 3;
-        filter_median         = 0;
-        filter_adaptive_mean  = 1;
+        // speckle_sim_threshold = 1;
+        // speckle_size          = 200;
+        // ipol_gap_width        = 3;
+        // filter_median         = 0;
+        // filter_adaptive_mean  = 1;
         postprocess_only_left = 1;
         subsampling           = 0;
         
@@ -133,11 +133,11 @@ public:
         sradius               = 3;
         match_texture         = 0;
         lr_threshold          = 2;
-        speckle_sim_threshold = 1;
-        speckle_size          = 200;
-        ipol_gap_width        = 5000;
-        filter_median         = 1;
-        filter_adaptive_mean  = 0;
+        // speckle_sim_threshold = 1;
+        // speckle_size          = 200;
+        // ipol_gap_width        = 5000;
+        // filter_median         = 1;
+        // filter_adaptive_mean  = 0;
         postprocess_only_left = 0;
         subsampling           = 0;
       }
@@ -159,7 +159,7 @@ public:
   //         note: D1 and D2 must be allocated before (bytes per line = width)
   //               if subsampling is not active their size is width x height,
   //               otherwise width/2 x height/2 (rounded towards zero)
-  void process (uint8_t* I1,uint8_t* I2,float* D1,float* D2,const int32_t* dims);
+  void process (uint8_t* I1,uint8_t* I2,float* D1,float* D2, float* Prob1,float* Prob2, const int32_t* dims);
   
 private:
   
@@ -178,7 +178,7 @@ private:
   };
 
   inline uint32_t getAddressOffsetImage (const int32_t& u,const int32_t& v,const int32_t& width) {
-    return v*width+u;
+    return v*width+u; // Exemplo: terceiro pixel da primeira linha - 0*900+3 = address 3
   }
 
   inline uint32_t getAddressOffsetGrid (const int32_t& x,const int32_t& y,const int32_t& d,const int32_t& width,const int32_t& disp_num) {
@@ -205,20 +205,20 @@ private:
                                       const __m128i &xmm1,__m128i &xmm2,int32_t &val,int32_t &min_val,int32_t &min_d);
   inline void findMatch (int32_t &u,int32_t &v,float &plane_a,float &plane_b,float &plane_c,
                          int32_t* disparity_grid,int32_t *grid_dims,uint8_t* I1_desc,uint8_t* I2_desc,
-                         int32_t *P,int32_t &plane_radius,bool &valid,bool &right_image,float* D);
+                         int32_t *P,int32_t &plane_radius,bool &valid,bool &right_image,float* D, float* Prob);
   void computeDisparity (std::vector<support_pt> p_support,std::vector<triangle> tri,int32_t* disparity_grid,int32_t* grid_dims,
-                         uint8_t* I1_desc,uint8_t* I2_desc,bool right_image,float* D);
+                         uint8_t* I1_desc,uint8_t* I2_desc,bool right_image,float* D, float* Prob);
 
   // L/R consistency check
   void leftRightConsistencyCheck (float* D1,float* D2);
   
   // postprocessing
-  void removeSmallSegments (float* D);
-  void gapInterpolation (float* D);
+  // void removeSmallSegments (float* D);
+  // void gapInterpolation (float* D);
 
   // optional postprocessing
-  void adaptiveMean (float* D);
-  void median (float* D);
+  // void adaptiveMean (float* D);
+  // void median (float* D);
   
   // parameter set
   parameters param;

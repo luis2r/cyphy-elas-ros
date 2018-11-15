@@ -21,12 +21,12 @@
 
 disp('Building wrappers ...');
 
-% standard version
-mex('elasMex.cpp','../src/elas.cpp','../src/descriptor.cpp', '../src/filter.cpp', ...
-    '../src/triangle.cpp','../src/matrix.cpp','-I../src','CXXFLAGS=-msse3 -fPIC');
+% % standard version
+% mex('elasMex.cpp','../src/elas.cpp','../src/descriptor.cpp', '../src/filter.cpp', ...
+%     '../src/triangle.cpp','../src/matrix.cpp','-I../src','CXXFLAGS=-msse3 -fPIC');
 
 % version for profiling individual timings (only for linux)
-%mex('elasMex.cpp','../src/elas.cpp','../src/descriptor.cpp', ...
-%    '../src/triangle.cpp','../src/matrix.cpp','-I../src','CXXFLAGS=-msse3 -fPIC','-DPROFILE');
+mex('elasMex.cpp','../src/elas.cpp','../src/descriptor.cpp', ...
+   '../src/triangle.cpp','../src/matrix.cpp','-I../src','-I../include','CXXFLAGS=-msse3 -fPIC','-DPROFILE');
 
 disp('...done!');

@@ -20,7 +20,6 @@
  You should have received a copy of the GNU General Public License
  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #include <ros/ros.h>
 
 #include <sensor_msgs/Image.h>
@@ -45,12 +44,12 @@
 
 #include <elas_ros/ElasFrameData.h>
 
-#include <elas.h>
+#include <libelas/elas.h>
+
 
 #include <fstream>
 #include <iostream>
- using namespace std;
-
+using namespace std;
 //#define DOWN_SAMPLE
 
 class Elas_Proc
@@ -60,13 +59,6 @@ public:
   {
     ros::NodeHandle local_nh("~");
     local_nh.param("queue_size", queue_size_, 5);
-
-    // // Topics
-    // std::string stereo_ns = nh.resolveName("stereo");
-    // std::string left_topic = ros::names::clean(stereo_ns + "/left/" + nh.resolveName("image"));
-    // std::string right_topic = ros::names::clean(stereo_ns + "/right/" + nh.resolveName("image"));
-    // std::string left_info_topic = stereo_ns + "/left/camera_info";
-    // std::string right_info_topic = stereo_ns + "/right/camera_info";
 
     // Topics
     std::string stereo_ns = nh.resolveName("stereo");
@@ -129,11 +121,11 @@ public:
     param->sradius               = 2;
     param->match_texture         = 1;
     param->lr_threshold          = 2;
-    // param->speckle_sim_threshold = 1;
-    // param->speckle_size          = 200;
-    // param->ipol_gap_width        = 300;
-    // param->filter_median         = 0;
-    // param->filter_adaptive_mean  = 1;
+    param->speckle_sim_threshold = 1;
+    param->speckle_size          = 200;
+    param->ipol_gap_width        = 300;
+    param->filter_median         = 0;
+    param->filter_adaptive_mean  = 1;
     param->postprocess_only_left = 1;
     param->subsampling           = 0;
 
@@ -316,12 +308,9 @@ public:
     //float* l_disp_data = new float[width*height*sizeof(float)];
     float* l_disp_data = reinterpret_cast<float*>(&disp_msg->image.data[0]);
     float* r_disp_data = new float[width*height*sizeof(float)];
-    float* l_prob_data = new float[width*height*sizeof(float)];
-    float* r_prob_data = new float[width*height*sizeof(float)];
-
 
     // Process
-    elas_->process(l_image_data, r_image_data, l_disp_data, r_disp_data, l_prob_data, r_prob_data, dims);
+    elas_->process(l_image_data, r_image_data, l_disp_data, r_disp_data, dims);
 
     // Find the max for scaling the image colour
     float disp_max = 0;
@@ -331,40 +320,11 @@ public:
       if (r_disp_data[i]>disp_max) disp_max = r_disp_data[i];
     }
 
-
-
-    // static int image_count = 0;                                // added this
-    // char buffer1 [200];
-    // // char buffer2 [200];
-
-    //     // 4.5mm focal length
-    // sprintf(buffer1, "/home/tiemi/Documents/3dSoft/teste/Image0_%06i.txt", image_count);
-    // // sprintf(buffer2, "/home/tiemi/Documents/3dSoft/teste/Image1_%06i.pgm", image_count);
-
-    // // ROS_ASSERT( cv::imwrite( buffer1,  l_disp_data ) );      // added this
-    // // ROS_ASSERT( cv::imwrite( buffer2,  r_disp_data ) );      // added this
-
-
-    // ofstream file;
-    // file.open(buffer1);
-    // file << l_disp_data;
-    // file.close();
-    // image_count++;
-
-    // cout << "teste";
-
-
-
-    // cv_bridge::CvImage out_depth_msg;
-    // out_depth_msg.header = l_image_msg->header;
-    // out_depth_msg.encoding = sensor_msgs::image_encodings::MONO16;
-    // out_depth_msg.image = cv::Mat(height, width, CV_16UC1);
-    // uint16_t * out_depth_msg_image_data = reinterpret_cast<uint16_t*>(&out_depth_msg.image.data[0]);
-
     cv_bridge::CvImage out_depth_msg;
     out_depth_msg.header = l_image_msg->header;
-    out_depth_msg.encoding = sensor_msgs::image_encodings::MONO8;
-    out_depth_msg.image = cv::Mat(height, width, CV_8UC1);
+    out_depth_msg.encoding = sensor_msgs::image_encodings::MONO16;
+    out_depth_msg.image = cv::Mat(height, width, CV_16UC1);
+    uint16_t * out_depth_msg_image_data = reinterpret_cast<uint16_t*>(&out_depth_msg.image.data[0]);
 
     cv_bridge::CvImage out_msg;
     out_msg.header = l_image_msg->header;
@@ -374,18 +334,15 @@ public:
     for (int32_t i=0; i<width*height; i++)
     {
       out_msg.image.data[i] = (uint8_t)std::max(255.0*l_disp_data[i]/disp_max,0.0);
-      // out_msg.image.data[i] = (uint8_t)std::max(255.0*l_prob_data[i],0.0);
       //disp_msg->image.data[i] = l_disp_data[i];
       //disp_msg->image.data[i] = out_msg.image.data[i]
 
-      /***float disp =  l_disp_data[i];
+      float disp =  l_disp_data[i];
       // In milimeters
       //out_depth_msg_image_data[i] = disp;
       out_depth_msg_image_data[i] = disp <= 0.0f ? bad_point : (uint16_t)(depth_fact/disp);
 
-      if (l_disp_data[i] > 0) inliers.push_back(i); ***/
-
-      out_depth_msg.image.data[i] = (uint8_t)std::max(255.0*l_prob_data[i],0.0);
+      if (l_disp_data[i] > 0) inliers.push_back(i);
     }
 
     // Publish

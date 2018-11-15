@@ -19,14 +19,14 @@ libelas; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA 
 */
 
-#include <libelas/descriptor.h>
-#include <libelas/filter.h>
+#include "descriptor.h"
+#include "filter.h"
 #include <emmintrin.h>
 
 using namespace std;
 
 Descriptor::Descriptor(uint8_t* I,int32_t width,int32_t height,int32_t bpl,bool half_resolution) {
-  I_desc        = (uint8_t*)_mm_malloc(16*width*height*sizeof(uint8_t),16);
+  I_desc        = (uint8_t*)_mm_malloc(16*width*height*sizeof(uint8_t),16); //requests a 16-byte aligned memory block for 16*width*height uint8 point elements
   uint8_t* I_du = (uint8_t*)_mm_malloc(bpl*height*sizeof(uint8_t),16);
   uint8_t* I_dv = (uint8_t*)_mm_malloc(bpl*height*sizeof(uint8_t),16);
   filter::sobel3x3(I,I_du,I_dv,bpl,height);

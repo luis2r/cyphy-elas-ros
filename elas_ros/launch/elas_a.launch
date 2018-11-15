@@ -1,4 +1,4 @@
-<?xml version="1.0"?>
+<!-- -->
 <launch>
     <!-- Launches ELAS node, and rectification nodes for input --> 
     <!-- Arguments: input stereo namespace and output elas namespace -->
