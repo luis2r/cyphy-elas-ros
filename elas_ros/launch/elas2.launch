@@ -1,0 +1,16 @@
+<!-- -->
+<launch>
+
+  <!-- This can be replaced with your favourite visual odometry node. -->
+  <node pkg="viso2_ros" type="stereo_odometer" name="vo2"
+      args="stereo:=stereo/narrow image:=image_rect _odom_frame_id:=/odom_combined _base_link_frame_id:=/base_footprint _publish_tf:=true">
+    <param name="approximate_sync" value="true" />
+  </node>
+
+  <node pkg="elas_ros" type="elas_ros" name="elas" args="stereo:=stereo/narrow image:=image_rect_color" respawn="true">
+    <param name="approximate_sync" value="true" />
+  </node>
+  <node pkg="elas_ros" type="pc_construction" name="elas_pc"
+    args="frame_data:=/elas/frame_data pose:=/vo2/pose base_frame_id:=/odom_combined pose_frame_id:=/base_footprint" />
+
+</launch>

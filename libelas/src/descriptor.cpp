@@ -19,8 +19,8 @@ libelas; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA 
 */
 
-#include "descriptor.h"
-#include "filter.h"
+#include <libelas/descriptor.h>
+#include <libelas/filter.h>
 #include <emmintrin.h>
 
 using namespace std;

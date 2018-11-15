@@ -19,12 +19,12 @@ libelas; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA 
 */
 
-#include "elas.h"
+#include "libelas/elas.h"
 
 #include <math.h>
-#include "descriptor.h"
-#include "triangle.h"
-#include "matrix.h"
+#include "libelas/descriptor.h"
+#include "libelas/triangle.h"
+#include "libelas/matrix.h"
 
 using namespace std;
 

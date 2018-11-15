@@ -45,7 +45,7 @@
 
 #include <elas_ros/ElasFrameData.h>
 
-#include <elas.h>
+#include <libelas/elas.h>
 
 //#define DOWN_SAMPLE
 
@@ -81,20 +81,20 @@ public:
     pub_disparity_ = local_nh.advertise<stereo_msgs::DisparityImage>("disparity", 1);
 
     // Synchronize input topics. Optionally do approximate synchronization.
-    bool approx;
-    local_nh.param("approximate_sync", approx, false);
-    if (approx)
-    {
-      approximate_sync_.reset(new ApproximateSync(ApproximatePolicy(queue_size_),
-                                                  left_sub_, right_sub_, left_info_sub_, right_info_sub_) );
-      approximate_sync_->registerCallback(boost::bind(&Elas_Proc::process, this, _1, _2, _3, _4));
-    }
-    else
-    {
-      exact_sync_.reset(new ExactSync(ExactPolicy(queue_size_),
-                                      left_sub_, right_sub_, left_info_sub_, right_info_sub_) );
-      exact_sync_->registerCallback(boost::bind(&Elas_Proc::process, this, _1, _2, _3, _4));
-    }
+    // bool approx;
+    // local_nh.param("approximate_sync", approx, false);
+    // if (approx)
+    // {
+    //   approximate_sync_.reset(new ApproximateSync(ApproximatePolicy(queue_size_),
+    //                                               left_sub_, right_sub_, left_info_sub_, right_info_sub_) );
+    //   approximate_sync_->registerCallback(boost::bind(&Elas_Proc::process, this, _1, _2, _3, _4));
+    // }
+    // else
+    // {
+    //   exact_sync_.reset(new ExactSync(ExactPolicy(queue_size_),
+    //                                   left_sub_, right_sub_, left_info_sub_, right_info_sub_) );
+    //   exact_sync_->registerCallback(boost::bind(&Elas_Proc::process, this, _1, _2, _3, _4));
+    // }
 
     // Create the elas processing class
     //param.reset(new Elas::parameters(Elas::MIDDLEBURY));
