@@ -44,7 +44,7 @@
 
 #include <elas_ros/ElasFrameData.h>
 
-#include <libelas/elas.h>
+#include <elas.h>
 
 
 #include <fstream>
@@ -85,7 +85,9 @@ public:
 
     // Synchronize input topics. Optionally do approximate synchronization.
     bool approx;
-    local_nh.param("approximate_sync", approx, false);
+    //local_nh.param("approximate_sync", approx, false);
+    local_nh.param("approximate_sync", approx, true);
+
     if (approx)
     {
       approximate_sync_.reset(new ApproximateSync(ApproximatePolicy(queue_size_),

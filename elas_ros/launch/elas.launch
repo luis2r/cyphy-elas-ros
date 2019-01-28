@@ -2,7 +2,8 @@
 <launch>
     <!-- Launches ELAS node, and rectification nodes for input --> 
     <!-- Arguments: input stereo namespace and output elas namespace -->
-    <arg name="stereo" default="stereo/narrow"/>
+    <!-- <arg name="stereo" default="stereo/narrow"/> -->
+    <arg name="stereo" default="stereo"/>
     <arg name="elas_ns" default="elas"/>
     <group ns="$(arg stereo)/left">
         <node name="left_rect" pkg="image_proc" type="image_proc"/>
