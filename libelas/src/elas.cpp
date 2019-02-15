@@ -28,7 +28,7 @@ Street, Fifth Floor, Boston, MA 02110-1301, USA
 
 using namespace std;
 
-void Elas::process (uint8_t* I1_,uint8_t* I2_,float* D1,float* D2,const int32_t* dims){
+void Elas::process (uint8_t* I1_,uint8_t* I2_,float* D1,float* D2,const int32_t* dims, vector<support_pt> p_support_pcl){
   
   // get width, height and bytes per line
   width  = dims[0];
@@ -66,7 +66,17 @@ void Elas::process (uint8_t* I1_,uint8_t* I2_,float* D1,float* D2,const int32_t*
 #ifdef PROFILE
   timer.start("Support Matches");
 #endif
-  vector<support_pt> p_support = computeSupportMatches(desc1.I_desc,desc2.I_desc);
+
+
+// vector<support_pt> p_support = computeSupportMatches(desc1.I_desc,desc2.I_desc);
+
+vector<support_pt> p_support = p_support_pcl;// only velodyne suport points
+
+
+
+// for (int32_t i=0; i<p_support_pcl.size(); i++) {// stereo elas and velodyne suport points
+//      p_support.push_back(p_support_pcl[i]);
+//  }
 
 #ifdef PROFILE
   timer.start("Delaunay Triangulation");

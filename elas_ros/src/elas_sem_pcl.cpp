@@ -38,10 +38,6 @@
 
 #include <cv_bridge/cv_bridge.h>
 
-#include <opencv2/core/core.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/highgui/highgui.hpp>
-
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -79,18 +75,14 @@ public:
     std::string right_topic = ros::names::clean(stereo_ns + "/right/" + nh.resolveName("image"));
     std::string left_info_topic = stereo_ns + "/left/camera_info";
     std::string right_info_topic = stereo_ns + "/right/camera_info";
-    std::string lidar_topic = "kitti_player/hdl64e";
-
 
     image_transport::ImageTransport it(nh);
     left_sub_.subscribe(it, left_topic, 1, transport);
     right_sub_.subscribe(it, right_topic, 1, transport);
     left_info_sub_.subscribe(nh, left_info_topic, 1);
     right_info_sub_.subscribe(nh, right_info_topic, 1);
-    cloud_sub_.subscribe( nh, lidar_topic, 1 );
 
-
-    ROS_INFO("Subscribing to:\n%s\n%s\n%s\n%s\n%s",left_topic.c_str(),right_topic.c_str(),left_info_topic.c_str(),right_info_topic.c_str(), lidar_topic.c_str());
+    ROS_INFO("Subscribing to:\n%s\n%s\n%s\n%s",left_topic.c_str(),right_topic.c_str(),left_info_topic.c_str(),right_info_topic.c_str());
 
     image_transport::ImageTransport local_it(local_nh);
     disp_pub_.reset(new Publisher(local_it.advertise("image_disparity", 1)));
@@ -108,14 +100,14 @@ public:
     if (approx)
     {
       approximate_sync_.reset(new ApproximateSync(ApproximatePolicy(queue_size_),
-                                                  left_sub_, right_sub_, left_info_sub_, right_info_sub_, cloud_sub_) );
-      approximate_sync_->registerCallback(boost::bind(&Elas_Proc::process, this, _1, _2, _3, _4, _5));
+                                                  left_sub_, right_sub_, left_info_sub_, right_info_sub_) );
+      approximate_sync_->registerCallback(boost::bind(&Elas_Proc::process, this, _1, _2, _3, _4));
     }
     else
     {
       exact_sync_.reset(new ExactSync(ExactPolicy(queue_size_),
-                                      left_sub_, right_sub_, left_info_sub_, right_info_sub_, cloud_sub_) );
-      exact_sync_->registerCallback(boost::bind(&Elas_Proc::process, this, _1, _2, _3, _4, _5));
+                                      left_sub_, right_sub_, left_info_sub_, right_info_sub_) );
+      exact_sync_->registerCallback(boost::bind(&Elas_Proc::process, this, _1, _2, _3, _4));
     }
 
     // Create the elas processing class
@@ -160,13 +152,11 @@ public:
   typedef image_transport::SubscriberFilter Subscriber;
   typedef message_filters::Subscriber<sensor_msgs::CameraInfo> InfoSubscriber;
   typedef image_transport::Publisher Publisher;
-  typedef message_filters::sync_policies::ExactTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo, sensor_msgs::CameraInfo, sensor_msgs::PointCloud2 > ExactPolicy;
-  typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo, sensor_msgs::CameraInfo, sensor_msgs::PointCloud2 > ApproximatePolicy;
+  typedef message_filters::sync_policies::ExactTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo, sensor_msgs::CameraInfo> ExactPolicy;
+  typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo, sensor_msgs::CameraInfo> ApproximatePolicy;
   typedef message_filters::Synchronizer<ExactPolicy> ExactSync;
   typedef message_filters::Synchronizer<ApproximatePolicy> ApproximateSync;
   typedef pcl::PointCloud<pcl::PointXYZRGB> PointCloud;
-  typedef message_filters::Subscriber<sensor_msgs::PointCloud2> CloudSubscriber;
-
 
   void publish_point_cloud(const sensor_msgs::ImageConstPtr& l_image_msg, 
                            float* l_disp_data, const std::vector<int32_t>& inliers,
@@ -259,8 +249,7 @@ public:
   void process(const sensor_msgs::ImageConstPtr& l_image_msg, 
                const sensor_msgs::ImageConstPtr& r_image_msg,
                const sensor_msgs::CameraInfoConstPtr& l_info_msg, 
-               const sensor_msgs::CameraInfoConstPtr& r_info_msg,
-               const sensor_msgs::PointCloud2ConstPtr& msg)
+               const sensor_msgs::CameraInfoConstPtr& r_info_msg)
   {
     ROS_DEBUG("Received images and camera info.");
     // Update the camera model
@@ -332,149 +321,17 @@ public:
     float* r_disp_data = new float[width*height*sizeof(float)];
 
 
-
-/***********************************read point cloud lidar *************************************************/
-
-      // ROS_INFO("recieved points");
-      pcl::PCLPointCloud2 pcl_pc;
-      pcl_conversions::toPCL(*msg, pcl_pc);
-      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
-      pcl::fromPCLPointCloud2(pcl_pc,*cloud);
-
-    // cv::Mat image;
-
-    // int height   = l_image_msg->height;
-    // int width    = l_image_msg->width;
-    // cv::Mat disp_img(height, width, CV_8UC3, cv::Scalar(255,255,255));
-    // cv_bridge::CvImagePtr input_bridge;
-    // try {
-    //   input_bridge = cv_bridge::toCvCopy(l_image_msg, sensor_msgs::image_encodings::BGR8);
-    //   image = input_bridge->image;
-    // }
-    // catch (cv_bridge::Exception& ex){
-    //   ROS_ERROR("[draw_frames] Failed to convert image");
-    //   return;
-    // }
-
-    // cam_model_.fromCameraInfo(l_info_msg,r_info_msg);
-    cv::Matx44d Q =   model_.reprojectionMatrix ();
-    // ROS_INFO_STREAM("Q: \n"<<Q);
-
-    //*********************** http://answers.opencv.org/question/4379/from-3d-point-cloud-to-disparity-map/
-    float cx = -Q(0,3)/Q(0,0);
-    float cy = -Q(1,3)/Q(0,0); 
-    float fx = Q(2,3)/Q(0,0); 
-    float a = Q(2,3)/Q(0,0); // 1/Tx
-    float b = Q(2,3)/Q(0,0); // cx-cx'
-    float d = 0.0;
-    Eigen::Matrix4f Tr_velo_to_cam = Eigen::Matrix4f::Identity();
-    Eigen::Matrix4f R0_rect = Eigen::Matrix4f::Identity();
-    Eigen::Vector4f uvproy = Eigen::Vector4f::Zero();
-    Eigen::Matrix4f P2 = Eigen::Matrix4f::Identity();
-
-
-    Tr_velo_to_cam (0,0) = 0.007533745;
-    Tr_velo_to_cam (0,1) = -0.9999714;
-    Tr_velo_to_cam (0,2) = -0.0006166020;
-    Tr_velo_to_cam (0,3) = -0.004069766;
-
-    Tr_velo_to_cam (1,0) = 0.01480249;
-    Tr_velo_to_cam (1,1) = 0.0007280733;
-    Tr_velo_to_cam (1,2) = -0.9998902;
-    Tr_velo_to_cam (1,3) = -0.07631618;
-
-    Tr_velo_to_cam (2,0) = 0.9998621;
-    Tr_velo_to_cam (2,1) = 0.007523790;
-    Tr_velo_to_cam (2,2) = 0.01480755;
-    Tr_velo_to_cam (2,2) = -0.2717806;
-
-    R0_rect (0,0) = 9.999239e-01;
-    R0_rect (0,1) = 9.837760e-03;
-    R0_rect (0,2) = -7.445048e-03;
-
-
-    R0_rect (1,0) = -9.869795e-03;
-    R0_rect (1,1) = 9.999421e-01;
-    R0_rect (1,2) = -4.278459e-03;
-
-    R0_rect (2,0) = 7.402527e-03;
-    R0_rect (2,1) = 4.351614e-03;
-    R0_rect (2,2) = 9.999631e-01;
-
-    P2 (0,0) = 7.215377e+02;
-    P2 (0,1) = 0;
-    P2 (0,2) = 6.095593e+02;
-    P2 (0,3) = 4.485728e+01;
-
-
-    P2 (1,0) = 0;
-    P2 (1,1) = 7.215377e+02;
-    P2 (1,2) = 1.728540e+02;
-    P2 (1,3) = 2.163791e-01;
-
-    P2 (2,0) = 0;
-    P2 (2,1) = 0;
-    P2 (2,2) = 1;
-    P2 (2,3) = 2.745884e-03;
-
     //********************************************* pointcloud disp points/************************************************/
-    vector<Elas::support_pt> p_support_pcl;
-    // Elas::support_pt p_support_cloud;
-    // vector<support_pt> p_support;
-
-    BOOST_FOREACH (const pcl::PointXYZ& pt, cloud->points)
-    {
-      Eigen::Vector4f xyzproy(pt.x, pt.y, pt.z, 1);
-
-     
-      if(pt.x>0)
-      {
-        uvproy = R0_rect*Tr_velo_to_cam*xyzproy;
-
-        cv::Point3d pt_cv(uvproy(0), uvproy(1), uvproy(2));
-
-        cv::Point2d uv;
-        uv = model_.left().project3dToPixel(pt_cv);
-
-        if( uv.x >=0 and uv.x<width and uv.y>=0 and uv.y<height)
-        {
-          double Z = sqrt(pow(pt_cv.x,2)+pow(pt_cv.y,2)+pow(pt_cv.z,2));
-
-          // d = model_.getDisparity(Z);
-
-          d = model_.getDisparity(pt_cv.z);
-
-          cv::Point3d point_3d;
-          model_.projectDisparityTo3d(uv, d, point_3d);
-
-          // depth_to_hot_pixel(Z, 50, -0, b, g, r);
-          // cv::circle(image,   uv, RADIUS, CV_RGB(r,g,b), -1);
-
-          // depth_to_hot_pixel(point_3d.z, 50, 0, b, g, r);
-          // cv::circle(disp_img,uv, RADIUS, CV_RGB(r,g,b), -1);   
-
-          p_support_pcl.push_back(Elas::support_pt(uv.x, uv.y, d));
-          // p_support_pcl.push_back(Elas::support_pt(0,1,0));
-          // p_support_pcl.push_back(Elas::support_pt(1,0,0));
-          // p_support_pcl.push_back(Elas::support_pt(1,1,0));       
-        }
-
-
-      }
-
-    }
-
-
-
-/***********************************end read point cloud lidar *************************************************/
-
-
-
+    vector<support_pt> p_support;
+    p_support.push_back(support_pt(0,0,0));
+    p_support.push_back(support_pt(0,1,0));
+    p_support.push_back(support_pt(1,0,0));
+    p_support.push_back(support_pt(1,1,0));
 
 
 /*********************************************************************************************/
     // Process
-    elas_->process(l_image_data, r_image_data, l_disp_data, r_disp_data, dims, p_support_pcl);
+    elas_->process(l_image_data, r_image_data, l_disp_data, r_disp_data, dims);
 
     // Find the max for scaling the image colour
     float disp_max = 0;
@@ -508,14 +365,7 @@ public:
 
       if (l_disp_data[i] > 0) inliers.push_back(i);
     }
-    std_msgs::Header h = l_image_msg->header;//only for print an sabe file;
 
-    std::string out_string;
-    std::stringstream ss;
-    ss << h.stamp;
-    out_string = ss.str();
-
-    cv::imwrite( "/home/luis/disp_elas_img/lidar/"+ out_string +".png", out_msg.image );
     // Publish
     disp_pub_->publish(out_msg.toImageMsg());
     depth_pub_->publish(out_depth_msg.toImageMsg());
@@ -533,9 +383,6 @@ private:
   ros::NodeHandle nh;
   Subscriber left_sub_, right_sub_;
   InfoSubscriber left_info_sub_, right_info_sub_;
-
-  CloudSubscriber cloud_sub_;
-
   boost::shared_ptr<Publisher> disp_pub_;
   boost::shared_ptr<Publisher> depth_pub_;
   boost::shared_ptr<ros::Publisher> pc_pub_;
