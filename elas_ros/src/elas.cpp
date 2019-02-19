@@ -184,6 +184,7 @@ public:
 
       PointCloud::Ptr point_cloud(new PointCloud());
       point_cloud->header.frame_id = l_info_header.frame_id;
+      // ROS_INFO_STREAM("FRAME: "<<point_cloud->header.frame_id);
       point_cloud->header.stamp = l_info_header.stamp;
       point_cloud->width = 1;
       point_cloud->height = inliers.size();
@@ -235,16 +236,22 @@ public:
 #endif
         cv::Point3d point;
         model.projectDisparityTo3d(left_uv, l_disp_data[index], point);
-        point_cloud->points[i].x = point.x;
-        point_cloud->points[i].y = point.y;
-        point_cloud->points[i].z = point.z;
+
+
+
+   /********************************************descomentar scale *2*********************************************************/
+
+        point_cloud->points[i].x = point.x*2.3;
+        point_cloud->points[i].y = point.y*2.3;
+        point_cloud->points[i].z = point.z*2.3;
         point_cloud->points[i].r = data.r[index];
         point_cloud->points[i].g = data.g[index];
         point_cloud->points[i].b = data.b[index];
 
-        data.x[index] = point.x;
-        data.y[index] = point.y;
-        data.z[index] = point.z;
+        data.x[index] = point.x*2.3;
+        data.y[index] = point.y*2.3;
+        data.z[index] = point.z*2.3;
+        /*****************************************************************************************************/
       }
 
       pc_pub_->publish(point_cloud);
@@ -515,7 +522,7 @@ public:
     ss << h.stamp;
     out_string = ss.str();
 
-    cv::imwrite( "/home/luis/disp_elas_img/lidar/"+ out_string +".png", out_msg.image );
+    // cv::imwrite( "/home/luis/disp_elas_img/lidar/"+ out_string +".png", out_msg.image );
     // Publish
     disp_pub_->publish(out_msg.toImageMsg());
     depth_pub_->publish(out_depth_msg.toImageMsg());

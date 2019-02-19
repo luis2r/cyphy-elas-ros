@@ -68,9 +68,9 @@ void Elas::process (uint8_t* I1_,uint8_t* I2_,float* D1,float* D2,const int32_t*
 #endif
 
 
-// vector<support_pt> p_support = computeSupportMatches(desc1.I_desc,desc2.I_desc);
+vector<support_pt> p_support = computeSupportMatches(desc1.I_desc,desc2.I_desc);
 
-vector<support_pt> p_support = p_support_pcl;// only velodyne suport points
+// vector<support_pt> p_support = p_support_pcl;// only velodyne suport points
 
 
 
