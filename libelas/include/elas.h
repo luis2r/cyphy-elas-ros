@@ -169,6 +169,7 @@ public:
 
 
   void process (uint8_t* I1,uint8_t* I2,float* D1,float* D2,const int32_t* dims, std::vector<support_pt> p_support);
+  void process (uint8_t* I1,uint8_t* I2,float* D1,float* D2,const int32_t* dims);
   
 private:
   

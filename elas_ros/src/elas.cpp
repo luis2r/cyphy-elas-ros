@@ -79,7 +79,8 @@ public:
     std::string right_topic = ros::names::clean(stereo_ns + "/right/" + nh.resolveName("image"));
     std::string left_info_topic = stereo_ns + "/left/camera_info";
     std::string right_info_topic = stereo_ns + "/right/camera_info";
-    std::string lidar_topic = "kitti_player/hdl64e";
+    std::string lidar_topic = "/kitti_player/hdl64e_from_depth_left";
+    // std::string lidar_topic = "/kitti_player/hdl64e";
 
 
     image_transport::ImageTransport it(nh);
@@ -125,7 +126,7 @@ public:
 
     /* Parameters tunned*/
     param->disp_min              = 0;
-    param->disp_max              = 255;
+    param->disp_max              = 64;
     param->support_threshold     = 0.95;
     param->support_texture       = 10;
     param->candidate_stepsize    = 5;
@@ -241,16 +242,16 @@ public:
 
    /********************************************descomentar scale *2*********************************************************/
 
-        point_cloud->points[i].x = point.x*2.3;
-        point_cloud->points[i].y = point.y*2.3;
-        point_cloud->points[i].z = point.z*2.3;
+        point_cloud->points[i].x = point.x;
+        point_cloud->points[i].y = point.y;
+        point_cloud->points[i].z = point.z;
         point_cloud->points[i].r = data.r[index];
         point_cloud->points[i].g = data.g[index];
         point_cloud->points[i].b = data.b[index];
 
-        data.x[index] = point.x*2.3;
-        data.y[index] = point.y*2.3;
-        data.z[index] = point.z*2.3;
+        data.x[index] = point.x;
+        data.y[index] = point.y;
+        data.z[index] = point.z;
         /*****************************************************************************************************/
       }
 
@@ -426,8 +427,7 @@ public:
 
     //********************************************* pointcloud disp points/************************************************/
     vector<Elas::support_pt> p_support_pcl;
-    // Elas::support_pt p_support_cloud;
-    // vector<support_pt> p_support;
+
 
     BOOST_FOREACH (const pcl::PointXYZ& pt, cloud->points)
     {
@@ -436,9 +436,12 @@ public:
      
       if(pt.x>0)
       {
-        uvproy = R0_rect*Tr_velo_to_cam*xyzproy;
+        // uvproy = R0_rect*Tr_velo_to_cam*xyzproy;
 
-        cv::Point3d pt_cv(uvproy(0), uvproy(1), uvproy(2));
+        // cv::Point3d pt_cv(uvproy(0), uvproy(1), uvproy(2));
+        
+        cv::Point3d pt_cv(pt.x, pt.y, pt.z);
+
 
         cv::Point2d uv;
         uv = model_.left().project3dToPixel(pt_cv);
@@ -447,9 +450,9 @@ public:
         {
           double Z = sqrt(pow(pt_cv.x,2)+pow(pt_cv.y,2)+pow(pt_cv.z,2));
 
-          // d = model_.getDisparity(Z);
+          d = model_.getDisparity(Z);
 
-          d = model_.getDisparity(pt_cv.z);
+          // d = model_.getDisparity(pt_cv.z);
 
           cv::Point3d point_3d;
           model_.projectDisparityTo3d(uv, d, point_3d);
@@ -522,7 +525,7 @@ public:
     ss << h.stamp;
     out_string = ss.str();
 
-    // cv::imwrite( "/home/luis/disp_elas_img/lidar/"+ out_string +".png", out_msg.image );
+    // cv::imwrite( "/home/luis/disp_elas_img/scene2/only_elas/"+ out_string +".png", out_msg.image );
     // Publish
     disp_pub_->publish(out_msg.toImageMsg());
     depth_pub_->publish(out_depth_msg.toImageMsg());
@@ -567,7 +570,7 @@ int main(int argc, char** argv)
     ROS_WARN("'stereo' has not been remapped! Example command-line usage:\n"
              "\t$ rosrun viso2_ros stereo_odometer stereo:=narrow_stereo image:=image_rect");
   }
-  if (ros::names::remap("image").find("rect") == std::string::npos) {
+  if (ros::names::remap("image").find("rect_color") == std::string::npos) {
     ROS_WARN("stereo_odometer needs rectified input images. The used image "
              "topic is '%s'. Are you sure the images are rectified?",
              ros::names::remap("image").c_str());
