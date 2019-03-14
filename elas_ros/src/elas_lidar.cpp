@@ -80,7 +80,7 @@ public:
     std::string left_info_topic = stereo_ns + "/left/camera_info";
     std::string right_info_topic = stereo_ns + "/right/camera_info";
     // std::string lidar_topic = "/kitti_player/hdl64e_from_depth_left";
-    // std::string lidar_topic = "/kitti_player/hdl64e";
+    std::string lidar_topic = "/kitti_player/hdl64e";
 
 
     image_transport::ImageTransport it(nh);
@@ -88,20 +88,20 @@ public:
     right_sub_.subscribe(it, right_topic, 1, transport);
     left_info_sub_.subscribe(nh, left_info_topic, 1);
     right_info_sub_.subscribe(nh, right_info_topic, 1);
-    // cloud_sub_.subscribe( nh, lidar_topic, 1 );
+    cloud_sub_.subscribe( nh, lidar_topic, 1 );
 
 
-    ROS_INFO("Subscribing to:\n%s\n%s\n%s\n%s",left_topic.c_str(),right_topic.c_str(),left_info_topic.c_str(),right_info_topic.c_str());
+    ROS_INFO("Subscribing to:\n%s\n%s\n%s\n%s\n%s",left_topic.c_str(),right_topic.c_str(),left_info_topic.c_str(),right_info_topic.c_str(), lidar_topic.c_str());
 
     image_transport::ImageTransport local_it(local_nh);
-    // disp_pub_.reset(new Publisher(local_it.advertise("image_disparity", 1)));
+    disp_pub_.reset(new Publisher(local_it.advertise("image_disparity", 1)));
 
-    // depth_pub_.reset(new CameraPublisher(local_it.advertiseCamera("depth", 1)));
+    depth_pub_.reset(new CameraPublisher(local_it.advertiseCamera("depth", 1)));
 
     pc_pub_.reset(new ros::Publisher(local_nh.advertise<PointCloud>("point_cloud", 1)));
-    // elas_fd_pub_.reset(new ros::Publisher(local_nh.advertise<elas_ros::ElasFrameData>("frame_data", 1)));
+    elas_fd_pub_.reset(new ros::Publisher(local_nh.advertise<elas_ros::ElasFrameData>("frame_data", 1)));
 
-    // pub_disparity_ = local_nh.advertise<stereo_msgs::DisparityImage>("disparity", 1);
+    pub_disparity_ = local_nh.advertise<stereo_msgs::DisparityImage>("disparity", 1);
 
     // Synchronize input topics. Optionally do approximate synchronization.
     bool approx;
@@ -111,14 +111,14 @@ public:
     if (approx)
     {
       approximate_sync_.reset(new ApproximateSync(ApproximatePolicy(queue_size_),
-                                                  left_sub_, right_sub_, left_info_sub_, right_info_sub_) );
-      approximate_sync_->registerCallback(boost::bind(&Elas_Proc::process, this, _1, _2, _3, _4));
+                                                  left_sub_, right_sub_, left_info_sub_, right_info_sub_, cloud_sub_) );
+      approximate_sync_->registerCallback(boost::bind(&Elas_Proc::process, this, _1, _2, _3, _4, _5));
     }
     else
     {
       exact_sync_.reset(new ExactSync(ExactPolicy(queue_size_),
-                                      left_sub_, right_sub_, left_info_sub_, right_info_sub_) );
-      exact_sync_->registerCallback(boost::bind(&Elas_Proc::process, this, _1, _2, _3, _4));
+                                      left_sub_, right_sub_, left_info_sub_, right_info_sub_, cloud_sub_) );
+      exact_sync_->registerCallback(boost::bind(&Elas_Proc::process, this, _1, _2, _3, _4, _5));
     }
 
     param.reset(new Elas::parameters);
@@ -151,23 +151,23 @@ public:
     //param->match_texture = 1;
     //param->postprocess_only_left = 1;
     //param->ipol_gap_width = 2;
-// #ifdef DOWN_SAMPLE
-    param->subsampling = false;
-// #endif
+#ifdef DOWN_SAMPLE
+    param->subsampling = true;
+#endif
     elas_.reset(new Elas(*param));
   }
 
   typedef image_transport::SubscriberFilter Subscriber;
   typedef message_filters::Subscriber<sensor_msgs::CameraInfo> InfoSubscriber;
   typedef image_transport::Publisher Publisher;
-  // typedef image_transport::CameraPublisher CameraPublisher;
+  typedef image_transport::CameraPublisher CameraPublisher;
 
-  typedef message_filters::sync_policies::ExactTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo, sensor_msgs::CameraInfo > ExactPolicy;
-  typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo, sensor_msgs::CameraInfo> ApproximatePolicy;
+  typedef message_filters::sync_policies::ExactTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo, sensor_msgs::CameraInfo, sensor_msgs::PointCloud2 > ExactPolicy;
+  typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo, sensor_msgs::CameraInfo, sensor_msgs::PointCloud2 > ApproximatePolicy;
   typedef message_filters::Synchronizer<ExactPolicy> ExactSync;
   typedef message_filters::Synchronizer<ApproximatePolicy> ApproximateSync;
   typedef pcl::PointCloud<pcl::PointXYZRGB> PointCloud;
-  // typedef message_filters::Subscriber<sensor_msgs::PointCloud2> CloudSubscriber;
+  typedef message_filters::Subscriber<sensor_msgs::PointCloud2> CloudSubscriber;
 
 
   void publish_point_cloud(const sensor_msgs::ImageConstPtr& l_image_msg, 
@@ -190,7 +190,7 @@ public:
       point_cloud->width =  l_width;
       point_cloud->height = l_height;
       point_cloud->points.resize(point_cloud->width * point_cloud->height); 
-      // ROS_INFO_STREAM( point_cloud->width <<" "<<  point_cloud->height);
+
       cv::Point3d point;
 
       for (size_t i=0; i<inliers.size(); i++)
@@ -198,37 +198,23 @@ public:
         cv::Point2d left_uv;
         int32_t index = inliers[i];
 
-        // #ifdef DOWN_SAMPLE
-        if(param->subsampling == true)
-        {
-          left_uv.x = (index % l_width) * 2;
-          left_uv.y = (index / l_width) * 2;
-        }
-        
-        // #else
-        else{
-          left_uv.x = index % l_width;
-          left_uv.y = index / l_width;
-        }
+        #ifdef DOWN_SAMPLE
+        left_uv.x = (index % l_width) * 2;
+        left_uv.y = (index / l_width) * 2;
+        #else
+        left_uv.x = index % l_width;
+        left_uv.y = index / l_width;
+        #endif
+        model.projectDisparityTo3d(left_uv, l_disp_data[index], point);
 
-        // #endif
-        if( left_uv.y > 50  )
-         // and left_uv.x < 200 )
-        {
-          model.projectDisparityTo3d(left_uv, l_disp_data[index], point);
-          if( point.z < 120 )
-          {
-            cv::Vec3b col = cv_ptr->image.at<cv::Vec3b>(left_uv.y,left_uv.x);
-            point_cloud->at(left_uv.x,left_uv.y).x = point.x;
-            point_cloud->at(left_uv.x,left_uv.y).y = point.y;
-            point_cloud->at(left_uv.x,left_uv.y).z = point.z;
-            point_cloud->at(left_uv.x,left_uv.y).r = col[0];
-            point_cloud->at(left_uv.x,left_uv.y).g = col[1];
-            point_cloud->at(left_uv.x,left_uv.y).b = col[2]; 
-          }
-                   
-        }
 
+        cv::Vec3b col = cv_ptr->image.at<cv::Vec3b>(left_uv.y,left_uv.x);
+        point_cloud->at(left_uv.x,left_uv.y).x = point.x;
+        point_cloud->at(left_uv.x,left_uv.y).y = point.y;
+        point_cloud->at(left_uv.x,left_uv.y).z = point.z;
+        point_cloud->at(left_uv.x,left_uv.y).r = col[0];
+        point_cloud->at(left_uv.x,left_uv.y).g = col[1];
+        point_cloud->at(left_uv.x,left_uv.y).b = col[2];
 
       }
       pc_pub_->publish(point_cloud);
@@ -242,24 +228,25 @@ public:
   void process(const sensor_msgs::ImageConstPtr& l_image_msg, 
                const sensor_msgs::ImageConstPtr& r_image_msg,
                const sensor_msgs::CameraInfoConstPtr& l_info_msg, 
-               const sensor_msgs::CameraInfoConstPtr& r_info_msg)
+               const sensor_msgs::CameraInfoConstPtr& r_info_msg,
+               const sensor_msgs::PointCloud2ConstPtr& msg)
   {
     ROS_DEBUG("Received images and camera info.");
     // Update the camera model
     model_.fromCameraInfo(l_info_msg, r_info_msg);
 
     // Allocate new disparity image message
-    // stereo_msgs::DisparityImagePtr disp_msg =
-    //   boost::make_shared<stereo_msgs::DisparityImage>();
-    // disp_msg->header         = l_info_msg->header;
-    // disp_msg->image.header   = l_info_msg->header;
-    // disp_msg->image.height   = l_image_msg->height;
-    // disp_msg->image.width    = l_image_msg->width;
-    // disp_msg->image.encoding = sensor_msgs::image_encodings::TYPE_32FC1;
-    // disp_msg->image.step     = disp_msg->image.width * sizeof(float);
-    // disp_msg->image.data.resize(disp_msg->image.height * disp_msg->image.step);
-    // disp_msg->min_disparity = param->disp_min;
-    // disp_msg->max_disparity = param->disp_max;
+    stereo_msgs::DisparityImagePtr disp_msg =
+      boost::make_shared<stereo_msgs::DisparityImage>();
+    disp_msg->header         = l_info_msg->header;
+    disp_msg->image.header   = l_info_msg->header;
+    disp_msg->image.height   = l_image_msg->height;
+    disp_msg->image.width    = l_image_msg->width;
+    disp_msg->image.encoding = sensor_msgs::image_encodings::TYPE_32FC1;
+    disp_msg->image.step     = disp_msg->image.width * sizeof(float);
+    disp_msg->image.data.resize(disp_msg->image.height * disp_msg->image.step);
+    disp_msg->min_disparity = param->disp_min;
+    disp_msg->max_disparity = param->disp_max;
 
     // Stereo parameters
     float f = model_.right().fx();
@@ -272,117 +259,234 @@ public:
     uint8_t *l_image_data, *r_image_data;
     int32_t l_step, r_step;
     cv_bridge::CvImageConstPtr l_cv_ptr, r_cv_ptr;
-    // if (l_image_msg->encoding == sensor_msgs::image_encodings::MONO8)
-    // {
-    //   l_image_data = const_cast<uint8_t*>(&(l_image_msg->data[0]));
-    //   l_step = l_image_msg->step;
-    //   ROS_INFO("mono8 l");
-    // }
-    // else
-    // {
-      // ROS_INFO("mono8 l else");
+    if (l_image_msg->encoding == sensor_msgs::image_encodings::MONO8)
+    {
+      l_image_data = const_cast<uint8_t*>(&(l_image_msg->data[0]));
+      l_step = l_image_msg->step;
+    }
+    else
+    {
       l_cv_ptr = cv_bridge::toCvShare(l_image_msg, sensor_msgs::image_encodings::MONO8);
       l_image_data = l_cv_ptr->image.data;
       l_step = l_cv_ptr->image.step[0];
-
-    // }
-    // if (r_image_msg->encoding == sensor_msgs::image_encodings::MONO8)
-    // {
-    //   ROS_INFO("mono8 r");
-    //   r_image_data = const_cast<uint8_t*>(&(r_image_msg->data[0]));
-    //   r_step = r_image_msg->step;
-    // }
-    // else
-    // {
+    }
+    if (r_image_msg->encoding == sensor_msgs::image_encodings::MONO8)
+    {
+      r_image_data = const_cast<uint8_t*>(&(r_image_msg->data[0]));
+      r_step = r_image_msg->step;
+    }
+    else
+    {
       r_cv_ptr = cv_bridge::toCvShare(r_image_msg, sensor_msgs::image_encodings::MONO8);
       r_image_data = r_cv_ptr->image.data;
       r_step = r_cv_ptr->image.step[0];
-    // }
+    }
 
     ROS_ASSERT(l_step == r_step);
     ROS_ASSERT(l_image_msg->width == r_image_msg->width);
     ROS_ASSERT(l_image_msg->height == r_image_msg->height);
 
-// #ifdef DOWN_SAMPLE
-  int32_t width = 0;
-  int32_t height = 0;
-  if(param->subsampling == true)
-  {
-    width = l_image_msg->width/2;
-    height = l_image_msg->height/2;
-  }
-// #else
-  else{
-    width = l_image_msg->width;
-    height = l_image_msg->height;    
-  }
-
-// #endif
+#ifdef DOWN_SAMPLE
+    int32_t width = l_image_msg->width/2;
+    int32_t height = l_image_msg->height/2;
+#else
+    int32_t width = l_image_msg->width;
+    int32_t height = l_image_msg->height;
+#endif
 
     // Allocate
     const int32_t dims[3] = {l_image_msg->width,l_image_msg->height,l_step};
     //float* l_disp_data = new float[width*height*sizeof(float)];
-    // float* l_disp_data = reinterpret_cast<float*>(&disp_msg->image.data[0]);
-
-    float* l_disp_data = new float[width*height*sizeof(float)];
+    float* l_disp_data = reinterpret_cast<float*>(&disp_msg->image.data[0]);
     float* r_disp_data = new float[width*height*sizeof(float)];
 
 
 
+/***********************************read point cloud lidar *************************************************/
 
-      // // ROS_INFO("recieved points");
-      // pcl::PCLPointCloud2 pcl_pc;
-      // pcl_conversions::toPCL(*msg, pcl_pc);
-      // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
-      // pcl::fromPCLPointCloud2(pcl_pc,*cloud);
+      // ROS_INFO("recieved points");
+      pcl::PCLPointCloud2 pcl_pc;
+      pcl_conversions::toPCL(*msg, pcl_pc);
+      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
+      pcl::fromPCLPointCloud2(pcl_pc,*cloud);
 
+    // cv::Mat image;
+
+    // int height   = l_image_msg->height;
+    // int width    = l_image_msg->width;
+    // cv::Mat disp_img(height, width, CV_8UC3, cv::Scalar(255,255,255));
+    // cv_bridge::CvImagePtr input_bridge;
+    // try {
+    //   input_bridge = cv_bridge::toCvCopy(l_image_msg, sensor_msgs::image_encodings::BGR8);
+    //   image = input_bridge->image;
+    // }
+    // catch (cv_bridge::Exception& ex){
+    //   ROS_ERROR("[draw_frames] Failed to convert image");
+    //   return;
+    // }
+
+    // cam_model_.fromCameraInfo(l_info_msg,r_info_msg);
+    cv::Matx44d Q =   model_.reprojectionMatrix ();
+    // ROS_INFO_STREAM("Q: \n"<<Q);
+
+    //*********************** http://answers.opencv.org/question/4379/from-3d-point-cloud-to-disparity-map/
+    float cx = -Q(0,3)/Q(0,0);
+    float cy = -Q(1,3)/Q(0,0); 
+    float fx = Q(2,3)/Q(0,0); 
+    float a = Q(2,3)/Q(0,0); // 1/Tx
+    float b = Q(2,3)/Q(0,0); // cx-cx'
+    float d = 0.0;
+    Eigen::Matrix4f Tr_velo_to_cam = Eigen::Matrix4f::Identity();
+    Eigen::Matrix4f R0_rect = Eigen::Matrix4f::Identity();
+    Eigen::Vector4f uvproy = Eigen::Vector4f::Zero();
+    Eigen::Matrix4f P2 = Eigen::Matrix4f::Identity();
+
+
+    Tr_velo_to_cam (0,0) = 0.007533745;
+    Tr_velo_to_cam (0,1) = -0.9999714;
+    Tr_velo_to_cam (0,2) = -0.0006166020;
+    Tr_velo_to_cam (0,3) = -0.004069766;
+
+    Tr_velo_to_cam (1,0) = 0.01480249;
+    Tr_velo_to_cam (1,1) = 0.0007280733;
+    Tr_velo_to_cam (1,2) = -0.9998902;
+    Tr_velo_to_cam (1,3) = -0.07631618;
+
+    Tr_velo_to_cam (2,0) = 0.9998621;
+    Tr_velo_to_cam (2,1) = 0.007523790;
+    Tr_velo_to_cam (2,2) = 0.01480755;
+    Tr_velo_to_cam (2,2) = -0.2717806;
+
+    R0_rect (0,0) = 9.999239e-01;
+    R0_rect (0,1) = 9.837760e-03;
+    R0_rect (0,2) = -7.445048e-03;
+
+
+    R0_rect (1,0) = -9.869795e-03;
+    R0_rect (1,1) = 9.999421e-01;
+    R0_rect (1,2) = -4.278459e-03;
+
+    R0_rect (2,0) = 7.402527e-03;
+    R0_rect (2,1) = 4.351614e-03;
+    R0_rect (2,2) = 9.999631e-01;
+
+    P2 (0,0) = 7.215377e+02;
+    P2 (0,1) = 0;
+    P2 (0,2) = 6.095593e+02;
+    P2 (0,3) = 4.485728e+01;
+
+
+    P2 (1,0) = 0;
+    P2 (1,1) = 7.215377e+02;
+    P2 (1,2) = 1.728540e+02;
+    P2 (1,3) = 2.163791e-01;
+
+    P2 (2,0) = 0;
+    P2 (2,1) = 0;
+    P2 (2,2) = 1;
+    P2 (2,3) = 2.745884e-03;
+
+    //********************************************* pointcloud disp points/************************************************/
+    vector<Elas::support_pt> p_support_pcl;
+
+
+    BOOST_FOREACH (const pcl::PointXYZ& pt, cloud->points)
+    {
+      Eigen::Vector4f xyzproy(pt.x, pt.y, pt.z, 1);
+
+     
+      if(pt.x>0)
+      {
+        // uvproy = R0_rect*Tr_velo_to_cam*xyzproy;
+
+        // cv::Point3d pt_cv(uvproy(0), uvproy(1), uvproy(2));
+        
+        cv::Point3d pt_cv(pt.x, pt.y, pt.z);
+
+
+        cv::Point2d uv;
+        uv = model_.left().project3dToPixel(pt_cv);
+
+        if( uv.x >=0 and uv.x<width and uv.y>=0 and uv.y<height)
+        {
+          double Z = sqrt(pow(pt_cv.x,2)+pow(pt_cv.y,2)+pow(pt_cv.z,2));
+
+          d = model_.getDisparity(Z);
+
+          // d = model_.getDisparity(pt_cv.z);
+
+          cv::Point3d point_3d;
+          model_.projectDisparityTo3d(uv, d, point_3d);
+
+          // depth_to_hot_pixel(Z, 50, -0, b, g, r);
+          // cv::circle(image,   uv, RADIUS, CV_RGB(r,g,b), -1);
+
+          // depth_to_hot_pixel(point_3d.z, 50, 0, b, g, r);
+          // cv::circle(disp_img,uv, RADIUS, CV_RGB(r,g,b), -1);   
+
+          p_support_pcl.push_back(Elas::support_pt(uv.x, uv.y, d));
+          // p_support_pcl.push_back(Elas::support_pt(0,1,0));
+          // p_support_pcl.push_back(Elas::support_pt(1,0,0));
+          // p_support_pcl.push_back(Elas::support_pt(1,1,0));       
+        }
+
+
+      }
+
+    }
+
+
+
+/***********************************end read point cloud lidar *************************************************/
+
+
+
+
+
+/*********************************************************************************************/
     // Process
-    elas_->process(l_image_data, r_image_data, l_disp_data, r_disp_data, dims);
+    elas_->process(l_image_data, r_image_data, l_disp_data, r_disp_data, dims, p_support_pcl);
 
     // Find the max for scaling the image colour
-    std::vector<int32_t> inliers;
-
     float disp_max = 0;
     for (int32_t i=0; i<width*height; i++)
     {
       if (l_disp_data[i]>disp_max) disp_max = l_disp_data[i];
-      // if (r_disp_data[i]>disp_max) disp_max = r_disp_data[i];
-      if (l_disp_data[i] > 0) inliers.push_back(i);
-
+      if (r_disp_data[i]>disp_max) disp_max = r_disp_data[i];
     }
 
-    // sensor_msgs::CameraInfo depthInfoMsg;
+    sensor_msgs::CameraInfo depthInfoMsg;
 
-    // cv_bridge::CvImage out_depth_msg;
-    // out_depth_msg.header = l_image_msg->header;
-    // out_depth_msg.encoding = sensor_msgs::image_encodings::MONO16;
-    // out_depth_msg.image = cv::Mat(height, width, CV_16UC1);
-    // uint16_t * out_depth_msg_image_data = reinterpret_cast<uint16_t*>(&out_depth_msg.image.data[0]);
+    cv_bridge::CvImage out_depth_msg;
+    out_depth_msg.header = l_image_msg->header;
+    out_depth_msg.encoding = sensor_msgs::image_encodings::MONO16;
+    out_depth_msg.image = cv::Mat(height, width, CV_16UC1);
+    uint16_t * out_depth_msg_image_data = reinterpret_cast<uint16_t*>(&out_depth_msg.image.data[0]);
 
-    // cv_bridge::CvImage out_msg;
-    // out_msg.header = l_image_msg->header;
-    // out_msg.encoding = sensor_msgs::image_encodings::MONO8;
-    // out_msg.image = cv::Mat(height, width, CV_8UC1);
-    // std::vector<int32_t> inliers;
-    // for (int32_t i=0; i<width*height; i++)
-    // {
-    //   // out_msg.image.data[i] = (uint8_t)std::max(255.0*l_disp_data[i]/disp_max,0.0);
-    //   //disp_msg->image.data[i] = l_disp_data[i];
-    //   //disp_msg->image.data[i] = out_msg.image.data[i]
+    cv_bridge::CvImage out_msg;
+    out_msg.header = l_image_msg->header;
+    out_msg.encoding = sensor_msgs::image_encodings::MONO8;
+    out_msg.image = cv::Mat(height, width, CV_8UC1);
+    std::vector<int32_t> inliers;
+    for (int32_t i=0; i<width*height; i++)
+    {
+      out_msg.image.data[i] = (uint8_t)std::max(255.0*l_disp_data[i]/disp_max,0.0);
+      //disp_msg->image.data[i] = l_disp_data[i];
+      //disp_msg->image.data[i] = out_msg.image.data[i]
 
-    //   // float disp =  l_disp_data[i];
-    //   // In milimeters
-    //   //out_depth_msg_image_data[i] = disp;
-    //   // out_depth_msg_image_data[i] = disp <= 0.0f ? bad_point : (uint16_t)(depth_fact/disp);
+      float disp =  l_disp_data[i];
+      // In milimeters
+      //out_depth_msg_image_data[i] = disp;
+      out_depth_msg_image_data[i] = disp <= 0.0f ? bad_point : (uint16_t)(depth_fact/disp);
 
-    //   if (l_disp_data[i] > 0) inliers.push_back(i);
-    // }
-    // std_msgs::Header h = l_image_msg->header;//only for print an sabe file;
+      if (l_disp_data[i] > 0) inliers.push_back(i);
+    }
+    std_msgs::Header h = l_image_msg->header;//only for print an sabe file;
 
-    // std::string out_string;
-    // std::stringstream ss;
-    // ss << h.stamp;
-    // out_string = ss.str();
+    std::string out_string;
+    std::stringstream ss;
+    ss << h.stamp;
+    out_string = ss.str();
 
     // cv::imwrite( "/home/luis/disp_elas_img/scene2/only_elas/"+ out_string +".png", out_msg.image );
     // Publish
@@ -408,14 +512,14 @@ public:
     // depthInfoMsg.P.data()
     // pub02.publish(ros_msg02, ros_cameraInfoMsg_camera02);
 
-    // disp_pub_->publish(out_msg.toImageMsg());
+    disp_pub_->publish(out_msg.toImageMsg());
 
     // disp_pub_->publish(out_msg.toImageMsg());
-    // depth_pub_->publish(out_depth_msg.toImageMsg(), l_info_msg); //using camerainfo from left image for depth image
+    depth_pub_->publish(out_depth_msg.toImageMsg(), l_info_msg); //using camerainfo from left image for depth image
     // depth_pub_->publish(out_depth_msg.toImageMsg());
     publish_point_cloud(l_image_msg, l_disp_data, inliers, width, height, l_info_msg, r_info_msg);
 
-    // pub_disparity_.publish(disp_msg);
+    pub_disparity_.publish(disp_msg);
 
     // Cleanup data
     //delete l_disp_data;
@@ -428,19 +532,19 @@ private:
   Subscriber left_sub_, right_sub_;
   InfoSubscriber left_info_sub_, right_info_sub_;
 
-  // CloudSubscriber cloud_sub_;
+  CloudSubscriber cloud_sub_;
 
-  // boost::shared_ptr<Publisher> disp_pub_;
-  // boost::shared_ptr<CameraPublisher> depth_pub_;
+  boost::shared_ptr<Publisher> disp_pub_;
+  boost::shared_ptr<CameraPublisher> depth_pub_;
   boost::shared_ptr<ros::Publisher> pc_pub_;
-  // boost::shared_ptr<ros::Publisher> elas_fd_pub_;
+  boost::shared_ptr<ros::Publisher> elas_fd_pub_;
   boost::shared_ptr<ExactSync> exact_sync_;
   boost::shared_ptr<ApproximateSync> approximate_sync_;
   boost::shared_ptr<Elas> elas_;
   int queue_size_;
 
   image_geometry::StereoCameraModel model_;
-  // ros::Publisher pub_disparity_;
+  ros::Publisher pub_disparity_;
   boost::scoped_ptr<Elas::parameters> param;
 
 

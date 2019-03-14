@@ -28,7 +28,7 @@ Street, Fifth Floor, Boston, MA 02110-1301, USA
 
 using namespace std;
 
-void Elas::process (uint8_t* I1_,uint8_t* I2_,float* D1,float* D2,const int32_t* dims, vector<support_pt> p_support_pcl){
+void Elas::process (uint8_t* I1_,uint8_t* I2_,float* D1,float* D2,const int32_t* dims){
   
   // get width, height and bytes per line
   width  = dims[0];
@@ -60,6 +60,7 @@ void Elas::process (uint8_t* I1_,uint8_t* I2_,float* D1,float* D2,const int32_t*
 #ifdef PROFILE
   timer.start("Descriptor");  
 #endif
+  // std::cout<<param.subsampling<<std::endl;
   Descriptor desc1(I1,width,height,bpl,param.subsampling);
   Descriptor desc2(I2,width,height,bpl,param.subsampling);
 
